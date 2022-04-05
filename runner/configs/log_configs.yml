@@ -1,0 +1,33 @@
+version: 1
+disable_existing_loggers: true
+
+formatters:
+    standard:
+        format: "%(asctime)s [%(levelname)s] - %(message)s"
+        datefmt: '%Y-%m-%d %H:%M:%S'
+
+handlers:
+    console:
+        class: logging.StreamHandler
+        level: INFO
+        formatter: standard
+        stream: ext://sys.stdout
+
+    file_handler:
+        class: logging.FileHandler
+        level: INFO
+        mode: a
+        formatter: standard
+        filename: /content/drive/My Drive/DS/Extra Year/BDOS/scripts/runner/log/my_logging.log
+        encoding: utf8
+
+
+loggers:
+     simpleExample:
+        level: NOTSET
+        handlers: [console, file_handler]
+        propagate: yes
+        
+root:
+    level: NOTSET
+    handlers: [console, file_handler]
