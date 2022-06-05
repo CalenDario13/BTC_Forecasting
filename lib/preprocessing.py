@@ -1,4 +1,8 @@
 import investpy
+import talib as tb
+from ta import add_all_ta_features
+
+import warnings
 
 import pandas as pd
 import numpy as np
@@ -47,8 +51,62 @@ def get_n_best_cryptos(n: int =10):
         
     return crypto_names
     
+def compute_moving_average(target_df:pd.DataFrame, col:str, ma_type:str='SMA', periods:list=None):
+
+    """
+    This function compute the simple moving average (MA) or the Exponential Moving Average (EMA),
+    for a given number of periods (or for the default ones) of the Closing Prices of a column of a dataset.
+
+    Parameters
+    ----------
+    target_df: pd.DataFrame
+      It is the original dataframe from which take the column to modify
+    col: str
+      the colimn of the traget_df to use to compute the MA
+    ma_type: str, (default='SMA), {'SMA', 'EMA'}
+      it indicate sthe kind of ma to compute (only SImpe and Exponential are allowed)
+    periods: list, (default=None), optional
+      It is possible to specify custom periods to compute the MA
+    
+    Notes
+    ------
+    If no period is specified, the default ones are [5, 10, 20, 50, 100, 200]
+
+    Returns
+    --------
+    pd.DataFrame
+      The target_df which includes the new MA columns
+    """
+    
+    # prepare periods:
+    if not periods:
+        periods = [5, 10, 20, 50, 100, 200]
+
+    # Get the column to modify:
+    target_col = target_df[col]
+
+    for p in periods:
+
+        # Compute Column:
+        if ma_type=='SMA':
+            new_ma = tb.SMA(target_col, p)
+            new_ma.name = 'trend_{}_{}'.format(ma_type.lower(), p)
+        elif ma_type == 'EMA':
+            new_ma = tb.SMA(target_col, p)
+            new_ma.name = 'trend_{}_{}'.format(ma_type.lower(), p)
+        else:
+            e = "This MA type is not allowed, choose among ('SMA' or 'EMA')"
+            logging.error(e)
+            raise ValueError(e)
+
+        # Add to DataFrame:
+        target_df = pd.concat([target_df, new_ma], axis=1)
+
+    return target_df
+
+    
  
-def retrieve_data(start_period: str, end_period: str, top_n: int =10):
+def retrieve_data(start_period: str, end_period: str, top_n:int=10, sma_periods:list=None, ema_periods:list=None):
  
     """ 
         This function prepare the data for the analysis and models
@@ -61,7 +119,10 @@ def retrieve_data(start_period: str, end_period: str, top_n: int =10):
             A string containing the ending date for the analysis
         top_n: int, (default=10)
             the number of values to retrieve (for example if n=10 it retrieves the top 10 cryptos)
-
+        sma_periods: list, (default=None), optional
+            A list of periods to compute the echnical indicator for the SMA  on Closing Prices of BTC
+        ema_periods: list, (default=None), optional
+            A list of periods to compute the technical indicator for the EMA  on Closing Prices of BTC
         Returns
         -------
         tpl of pd.DataFrame
@@ -74,8 +135,19 @@ def retrieve_data(start_period: str, end_period: str, top_n: int =10):
       logging.config.dictConfig(config)
       
     # Get Bitcoin data:
-    logging.info( "Starting retrieving data from period '{}' to '{}'".format(start_period, end_period) )
+    logging.info( "Starting retrieving data from period '{}' to '{}...'".format(start_period, end_period) )
     target_df = investpy.get_crypto_historical_data(crypto='bitcoin', from_date=start_period, to_date=end_period)
+    # Add technical Indicators:
+    logging.info( "Adding techincal Indicators For the BTC Prices..." )
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore")
+        target_df = add_all_ta_features(target_df, open="Open", high="High", low="Low", close="Close", volume="Volume")
+    # Add Custom MA and EMA:
+    target_df = compute_moving_average(target_df, col='Close', ma_type='SMA', periods=sma_periods)
+    target_df = compute_moving_average(target_df, col='Close', ma_type='EMA', periods=ema_periods)
+    
+    # Drop Unuseful Columns:
+    target_df.drop(columns=['Currency', 'trend_sma_fast','trend_sma_slow', 'trend_ema_fast', 'trend_ema_slow'], inplace=True) 
 
     # Get the top n cryptos to include in the analys:
     crypto_names = get_n_best_cryptos(n=top_n)
@@ -91,6 +163,8 @@ def retrieve_data(start_period: str, end_period: str, top_n: int =10):
             break
         
     crypto_df.columns = crypto_names
+    
+    logging.info("Retrivial Proess Succesfully End!")
     
     return target_df, crypto_df
     
